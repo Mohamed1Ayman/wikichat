@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wikichat
 
-## Getting Started
+Wikichat is a Next.js chat frontend with an Express, Socket.IO, and MongoDB backend.
 
-First, run the development server:
+## Run locally
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Install frontend dependencies in the repository root with `npm install`.
+2. Install backend dependencies with `npm install --prefix backend`.
+3. Copy `backend/.env.example` to `backend/.env`, set `MONGODB_URI` and SMTP credentials, and keep the file private.
+4. Copy `.env.example` to `.env.local`.
+5. In one terminal, run `npm start --prefix backend`.
+6. In another terminal, run `npm run dev`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The frontend uses `NEXT_PUBLIC_API_URL` (default `http://localhost:5000`) for HTTP and Socket.IO requests. The backend uses `FRONTEND_URL` to allow the frontend origin, `MONGODB_URI` for MongoDB, and `SMTP_*` settings for email verification and password resets.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This repository is configured for a Render backend (`render.yaml`) and a Vercel frontend:
 
-## Learn More
+1. Create a Render web service from this repository using the included Blueprint. Set `MONGODB_URI`, `FRONTEND_URL`, and the `SMTP_*` values in Render's environment settings. The health check is `/healthz`.
+2. Deploy the repository to Vercel with the repository root as the project root. Set `NEXT_PUBLIC_API_URL` to the public Render service URL, then deploy.
+3. Update the Render `FRONTEND_URL` with the deployed Vercel origin and redeploy the backend.
+4. In MongoDB Atlas, allow network access from the backend host. Restrict access to the provider's outbound addresses where available.
 
-To learn more about Next.js, take a look at the following resources:
+The included Render service uses the free plan, which may sleep when idle and have cold-start delays. Choose a paid plan in Render if the app needs uninterrupted availability. Never commit `.env`, `.env.local`, database credentials, SMTP passwords, or deployment secrets.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Email verification and password reset
+- Persistent users, messages, sessions, and one-time auth tokens in MongoDB
+- Real-time chat, delivery/read receipts, reactions, replies, edits, forwarding, and conversation deletion
+- Profile settings, avatars, themes, and Arabic/English UI
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Presence and active Socket.IO connections are runtime state and reset when the backend restarts.

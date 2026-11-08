@@ -267,6 +267,12 @@ input:focus-visible {
   flex-direction: column;
 }
 
+.google-sign-in {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
 .auth-form label {
   margin-bottom: 9px;
   color: #364540;

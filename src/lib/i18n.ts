@@ -47,6 +47,20 @@ export const messages = {
   profile: { en: 'Your profile', ar: 'ملفك الشخصي' },
   profileDescription: { en: 'Update your display name and profile picture.', ar: 'حدّث اسم العرض وصورة ملفك الشخصي.' },
   username: { en: 'Username', ar: 'اسم المستخدم' },
+  loginIdentifier: { en: 'Email or username', ar: 'البريد الإلكتروني أو اسم المستخدم' },
+  loginIdentifierPlaceholder: { en: 'you@example.com or Alex', ar: 'you@example.com أو أحمد' },
+  googleSignInFailed: {
+    en: 'Google sign-in failed. Please try again or use email and password.',
+    ar: 'تعذر تسجيل الدخول باستخدام Google. حاول مرة أخرى أو استخدم البريد الإلكتروني وكلمة المرور.',
+  },
+  googleSignInUnavailable: {
+    en: 'Google sign-in is not configured yet.',
+    ar: 'تسجيل الدخول باستخدام Google غير مُعدّ بعد.',
+  },
+  googleAccountConflict: {
+    en: 'This email is already linked to a different Google account.',
+    ar: 'هذا البريد الإلكتروني مرتبط بالفعل بحساب Google آخر.',
+  },
   usernameCooldown: {
     en: 'You can change your username again on {date}.',
     ar: 'يمكنك تغيير اسم المستخدم مرة أخرى في {date}.',
@@ -76,7 +90,10 @@ export const messages = {
   imageReadFailed: { en: 'Could not read this image. Try another one.', ar: 'تعذرت قراءة الصورة. جرّب صورة أخرى.' },
   oversizedAvatar: { en: 'This image is too large to use as a profile picture.', ar: 'حجم الصورة كبير جدًا لاستخدامها كصورة شخصية.' },
   usernameTaken: { en: 'Username already taken', ar: 'اسم المستخدم مستخدم بالفعل' },
-  invalidCredentials: { en: 'Invalid username or password', ar: 'اسم المستخدم أو كلمة المرور غير صحيحة' },
+  invalidCredentials: {
+    en: 'Invalid email, username, or password',
+    ar: 'البريد الإلكتروني أو اسم المستخدم أو كلمة المرور غير صحيحة',
+  },
   usernamePasswordRequired: { en: 'Username and password are required', ar: 'اسم المستخدم وكلمة المرور مطلوبان' },
   usernameTooLong: { en: 'Username must be 40 characters or fewer', ar: 'يجب ألا يتجاوز اسم المستخدم 40 حرفًا' },
   authResponseMissing: {

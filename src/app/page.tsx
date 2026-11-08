@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { SettingsLink } from '@/components/settings/SettingsLink';
 import { useSettings } from '@/components/settings/SettingsProvider';
 
@@ -26,6 +27,7 @@ interface ApiError {
 }
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -38,6 +40,22 @@ export default function LoginPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
   const { t, settings } = useSettings();
+
+  function completeSignIn(response: AuthResponse, fallbackUsername: string) {
+    if (!response.userId || !response.token) {
+      throw new Error(t('authResponseMissing'));
+    }
+
+    localStorage.setItem('userId', response.userId);
+    localStorage.setItem('authToken', response.token);
+    localStorage.setItem('username', response.username || fallbackUsername);
+    if (response.avatar) {
+      localStorage.setItem('avatar', response.avatar);
+    } else {
+      localStorage.removeItem('avatar');
+    }
+    router.push('/chat');
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,23 +85,11 @@ export default function LoginPage() {
       }
 
       const response = await axios.post<AuthResponse>(`${API_URL}/api/${endpoint}`, {
-        username: username.trim(),
+        identifier: username.trim(),
         password,
       });
 
-      if (!response.data.userId || !response.data.token) {
-        throw new Error(t('authResponseMissing'));
-      }
-
-      localStorage.setItem('userId', response.data.userId);
-      localStorage.setItem('authToken', response.data.token);
-      localStorage.setItem('username', response.data.username || username.trim());
-      if (response.data.avatar) {
-        localStorage.setItem('avatar', response.data.avatar);
-      } else {
-        localStorage.removeItem('avatar');
-      }
-      router.push('/chat');
+      completeSignIn(response.data, username.trim());
     } catch (error: unknown) {
       if (axios.isAxiosError<ApiError>(error)) {
         const apiMessage = error.response?.data?.message || error.response?.data?.error;
@@ -96,7 +102,7 @@ export default function LoginPage() {
           'Enter a valid email address': t('validEmailRequired'),
           'Password must be at least 8 characters and no more than 72 bytes': t('passwordTooShort'),
           'Could not send email. Check the email service configuration and try again.': t('emailDeliveryFailed'),
-          'Invalid username or password': t('invalidCredentials'),
+          'Invalid email, username, or password': t('invalidCredentials'),
           'Username and password are required': t('usernamePasswordRequired'),
           'Username must be 40 characters or fewer': t('usernameTooLong'),
         };
@@ -112,6 +118,38 @@ export default function LoginPage() {
           : error.message);
       } else {
         setErrorMessage(t('genericTryAgain'));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn(credential?: string) {
+    if (!credential || isSubmitting) {
+      setErrorMessage(t('googleSignInFailed'));
+      return;
+    }
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsSubmitting(true);
+    try {
+      const response = await axios.post<AuthResponse>(`${API_URL}/api/auth/google`, { credential });
+      completeSignIn(response.data, '');
+    } catch (error: unknown) {
+      if (axios.isAxiosError<ApiError>(error)) {
+        const apiMessage = error.response?.data?.error;
+        setErrorMessage(apiMessage === 'Google sign-in is not configured'
+          ? t('googleSignInUnavailable')
+          : apiMessage === 'This email is linked to a different Google account'
+            ? t('googleAccountConflict')
+          : error.code === 'ERR_NETWORK'
+            ? t('serverConnectionError')
+            : t('googleSignInFailed'));
+      } else if (error instanceof Error && error.message === t('authResponseMissing')) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage(t('googleSignInFailed'));
       }
     } finally {
       setIsSubmitting(false);
@@ -186,17 +224,17 @@ export default function LoginPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             {!isForgotPassword && (
               <>
-                <label htmlFor="username">{t('username')}</label>
+                <label htmlFor="username">{isRegistering ? t('username') : t('loginIdentifier')}</label>
                 <input
                   id="username"
                   name="username"
                   type="text"
                   autoComplete="username"
-                  placeholder={t('usernameExample')}
+                  placeholder={isRegistering ? t('usernameExample') : t('loginIdentifierPlaceholder')}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   required
-                  maxLength={40}
+                  maxLength={isRegistering ? 40 : 254}
                   disabled={isSubmitting}
                 />
               </>
@@ -284,6 +322,19 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {!isForgotPassword && GOOGLE_CLIENT_ID && (
+            <div className="google-sign-in">
+              <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                <GoogleLogin
+                  onSuccess={(credentialResponse) => void handleGoogleSignIn(credentialResponse.credential)}
+                  onError={() => setErrorMessage(t('googleSignInFailed'))}
+                  text={isRegistering ? 'signup_with' : 'continue_with'}
+                  shape="rectangular"
+                />
+              </GoogleOAuthProvider>
+            </div>
+          )}
 
           {successMessage && (
             <p className="auth-success" role="status">

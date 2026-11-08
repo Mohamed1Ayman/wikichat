@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('./models/User');
 const Message = require('./models/Message');
 const AuthToken = require('./models/AuthToken');
@@ -13,6 +14,7 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+const googleOAuthClient = new OAuth2Client();
 
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
   .split(',')
@@ -223,10 +225,16 @@ app.post('/api/register', async (req, res) => {
 
 // تسجيل الدخول
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body || {};
+  const { password } = req.body || {};
+  const identifier = [req.body?.identifier, req.body?.email, req.body?.username]
+    .find((value) => typeof value === 'string')?.trim().toLocaleLowerCase() || '';
 
-  const normalizedUsername = typeof username === 'string' ? username.trim().toLocaleLowerCase() : '';
-  const user = await User.findOne({ usernameNormalized: normalizedUsername });
+  const user = await User.findOne({
+    $or: [
+      { usernameNormalized: identifier },
+      { email: identifier },
+    ],
+  });
   const hasHashedPassword = typeof user?.password === 'string' && /^\$2[aby]\$/.test(user.password);
   const passwordMatches = user && typeof password === 'string'
     ? hasHashedPassword
@@ -234,7 +242,7 @@ app.post('/api/login', async (req, res) => {
       : user.password === password
     : false;
   if (!passwordMatches || !user) {
-    return res.status(401).json({ error: 'Invalid username or password' });
+    return res.status(401).json({ error: 'Invalid email, username, or password' });
   }
   if (!user.emailVerified) {
     return res.status(403).json({ error: 'Verify your email address before signing in' });
@@ -242,6 +250,78 @@ app.post('/api/login', async (req, res) => {
   if (!hasHashedPassword) {
     user.password = await bcrypt.hash(password, 12);
     await user.save();
+  }
+
+  res.json({
+    userId: user.id,
+    username: user.username,
+    avatar: user.avatar || null,
+    token: await createSession(user.id),
+  });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  const credential = typeof req.body?.credential === 'string' ? req.body.credential : '';
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.status(503).json({ error: 'Google sign-in is not configured' });
+  }
+  if (!credential) {
+    return res.status(400).json({ error: 'A Google credential is required' });
+  }
+
+  let payload;
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({ idToken: credential, audience: clientId });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: 'Could not verify Google sign-in' });
+  }
+
+  const email = payload?.email?.trim().toLowerCase();
+  if (!payload?.sub || !email || payload.email_verified !== true) {
+    return res.status(401).json({ error: 'Google must verify the account email address' });
+  }
+
+  const googleUser = await User.findOne({ googleSub: payload.sub });
+  const emailUser = await User.findOne({ email });
+  if (googleUser && emailUser && googleUser.id !== emailUser.id) {
+    return res.status(409).json({ error: 'This email is linked to a different Google account' });
+  }
+
+  let user = googleUser || emailUser;
+  if (user) {
+    if (user.googleSub && user.googleSub !== payload.sub) {
+      return res.status(409).json({ error: 'This email is linked to a different Google account' });
+    }
+    user.email = email;
+    user.googleSub = payload.sub;
+    user.emailVerified = true;
+    user.emailVerificationExpiresAt = undefined;
+    if (!user.avatar && payload.picture) {
+      user.avatar = payload.picture;
+    }
+    await user.save();
+    await AuthToken.deleteMany({ userId: user.id, purpose: 'email-verification' });
+  } else {
+    const baseUsername = (payload.name || email.split('@')[0]).trim().slice(0, 40) || 'Google user';
+    let username = baseUsername;
+    let usernameNormalized = username.toLocaleLowerCase();
+    while (await User.exists({ usernameNormalized })) {
+      const suffix = randomBytes(3).toString('hex');
+      username = `${baseUsername.slice(0, 33)}-${suffix}`;
+      usernameNormalized = username.toLocaleLowerCase();
+    }
+
+    user = await User.create({
+      _id: randomBytes(16).toString('hex'),
+      username,
+      usernameNormalized,
+      email,
+      emailVerified: true,
+      googleSub: payload.sub,
+      avatar: payload.picture || null,
+    });
   }
 
   res.json({
